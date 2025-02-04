@@ -3,6 +3,8 @@ using System.Security.Claims;
 using System.Text;
 using BookshopApi.Models;
 using BookshopApi.Models.Dto;
+using BookshopApi.Services.IService;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -15,64 +17,56 @@ namespace BookshopApi.Controllers
     [ApiController]
     public class AuthController : ControllerBase
     {
-        private readonly IConfiguration _configuration;
-        public static User user = new();
+        private readonly IAuthInterface _authService;
+       
 
-        public AuthController(IConfiguration configuration)
+        public AuthController(IAuthInterface authService)
         {
-            _configuration = configuration;
+            _authService = authService;
         }
         [HttpPost("register")]
-        public ActionResult<User> Register(UserDto request)
+        public async Task<ActionResult<User>> Register(UserDto request)
         {
-            var hashedPassword = new PasswordHasher<User>().HashPassword(user, request.Password);
+            var user = await _authService.RegisterUserAsync(request);
 
-            user.Username = request.Username;
-            user.PasswordHash = hashedPassword;
+            if (user is null)
+                return BadRequest("Username already exists!!");
 
             return Ok(user);
         }
 
         [HttpPost("login")]
 
-        public ActionResult<string> Login(UserDto request)
+        public async Task<ActionResult<TokenResponseDto>> Login(UserDto request)
         {
-            //check if user exists
-            if (user.Username != request.Username)
-            {
-                return BadRequest("User not Founnd");
-            }
-            //verify password hash
-            if (new PasswordHasher<User>().VerifyHashedPassword(user, user.PasswordHash, request.Password) == PasswordVerificationResult.Failed)
-            {
-                return BadRequest("Wrong Password!!");
-            }
-            //generate token
-            string token = CreateToken(user);
-            return Ok(token);
+            var result = await _authService.LoginAsync(request);
 
+            if (result is null)
+                return BadRequest("Invalid username or password!!");
+
+            return Ok(result);
         }
 
-        //generate token middleware
-        private string CreateToken(User user)
+        //protected route
+        [Authorize]
+        [HttpGet]
+
+        public IActionResult AuthenticatedOnlyEndpoint()
         {
-            var claims = new List<Claim>
-            {
-                new Claim(ClaimTypes.Name, user.Username)
-            };
-
-            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration.GetValue<string>("AppSettings:Token")!));
-
-            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha512);
-
-            var tokenDescriptor = new JwtSecurityToken(
-                issuer: _configuration.GetValue<string>("AppSettings:Issuer"),
-                audience:_configuration.GetValue<string>("AppSettings:audience"),
-                claims: claims,
-                expires: DateTime.UtcNow.AddDays(1),
-                signingCredentials: creds
-                );
-            return new JwtSecurityTokenHandler().WriteToken(tokenDescriptor);
+            return Ok("You are authenticated!");
         }
+
+        //admin route
+
+        [Authorize(Roles = "Admin")]
+        [HttpGet("admins-only")]
+
+        public IActionResult AdminsOnlyEndpoint()
+        {
+            return Ok("You are authenticated as admin!");
+        }
+
+
+
     }
 }
