@@ -36,12 +36,16 @@ namespace BookshopApi.Services
                 return null;
             }
             //generate token
-            var response = new TokenResponseDto
-            {
+           
+            return await CreateTokenResponse(user);
+        }
+
+        private async Task<TokenResponseDto> CreateTokenResponse(User? user)
+        {
+            return new TokenResponseDto {
                 AccessToken = CreateToken(user),
-                RefreshToken = await GenerateAndSaveRefreshTokenAsync(user),
+                RefreshToken = await GenerateAndSaveRefreshTokenAsync(user)
             };
-            return response;
         }
 
         public async Task<User> RegisterUserAsync(UserDto request)
@@ -59,6 +63,16 @@ namespace BookshopApi.Services
 
             await _context.Users.AddAsync(user);
             await _context.SaveChangesAsync();
+
+            return user;
+        }
+
+        //validate refresh token
+        private async Task<User?> ValidateRefreshTokenAsync(Guid userId, string refreshToken)
+        {
+            var user = await _context.Users.FindAsync(userId);
+            if (user is null || user.RefreshToken != refreshToken || user.RefreshTokenExpiryTime <= DateTime.UtcNow)
+                return null;
 
             return user;
         }
@@ -105,6 +119,15 @@ namespace BookshopApi.Services
                 signingCredentials: creds
                 );
             return new JwtSecurityTokenHandler().WriteToken(tokenDescriptor);
+        }
+
+        public async Task<TokenResponseDto?> RefreshTokenAsync(RefreshTokenRequestDto request)
+        {
+           var user = await ValidateRefreshTokenAsync(request.UserId, request.RefreshToken);
+            if (user is null)
+                return null;
+
+            return await CreateTokenResponse(user);
         }
     }
 }

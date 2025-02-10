@@ -7,6 +7,8 @@ namespace BookshopApi.Services.IService
     {
         Task<User> RegisterUserAsync(UserDto request);
 
-        Task<TokenResponseDto> LoginAsync(UserDto request);
+        Task<TokenResponseDto?> LoginAsync(UserDto request);
+
+        Task<TokenResponseDto?> RefreshTokenAsync(RefreshTokenRequestDto request);
     }
 }
